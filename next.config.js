@@ -1,12 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Turbopack is now stable, no experimental config needed
   images: {
     domains: ['localhost'],
     formats: ['image/avif', 'image/webp'],
   },
-  // Optimize for Railway deployment
-  output: 'standalone',
   // Enable compression
   compress: true,
   // Security headers
