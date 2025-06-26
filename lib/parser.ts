@@ -3,7 +3,7 @@ import { ContactData } from '../types/contact';
 // Regular expressions for common patterns
 const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
 const PHONE_REGEX = /(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
-const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g;
+const URL_REGEX = /(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}(?:\/[^\s<>"{}|\\^`[\]]*)?/g;
 const LINKEDIN_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[^\s<>"{}|\\^`[\]]+/gi;
 
 // Address patterns
@@ -156,12 +156,35 @@ function parseStructuredText(lines: string[]): Partial<ContactData> {
   }
   
   // Look for company (usually after title or name)
-  for (let i = nameIndex + 1; i < Math.min(lines.length, 4); i++) {
-    if (lines[i] && !containsTitleKeywords(lines[i]) && lines[i] !== result.title) {
-      // Skip if it looks like contact info
-      if (!hasContactInfo(lines[i])) {
-        result.company = lines[i];
-        break;
+  // First, try to find company after the title
+  let titleIndex = -1;
+  for (let i = 0; i < Math.min(lines.length, 4); i++) {
+    if (lines[i] === result.title) {
+      titleIndex = i;
+      break;
+    }
+  }
+  
+  // If we found a title, look for company right after it
+  if (titleIndex !== -1 && titleIndex + 1 < lines.length) {
+    const potentialCompany = lines[titleIndex + 1];
+    if (potentialCompany && !hasContactInfo(potentialCompany) && !containsTitleKeywords(potentialCompany)) {
+      result.company = potentialCompany;
+    }
+  }
+  
+  // If no company found yet, look for any line that could be a company
+  if (!result.company) {
+    for (let i = 0; i < Math.min(lines.length, 5); i++) {
+      if (i !== nameIndex && lines[i] !== result.title && lines[i]) {
+        // Skip if it looks like contact info
+        if (!hasContactInfo(lines[i]) && !containsTitleKeywords(lines[i])) {
+          // Check if it looks like a company name (contains common company words or multiple words)
+          if (isLikelyCompanyName(lines[i])) {
+            result.company = lines[i];
+            break;
+          }
+        }
       }
     }
   }
@@ -204,6 +227,41 @@ function parseLinkedInHeadline(headline: string): Partial<ContactData> {
 function containsTitleKeywords(text: string): boolean {
   const lowerText = text.toLowerCase();
   return TITLE_KEYWORDS.some(keyword => lowerText.includes(keyword));
+}
+
+// Check if text is likely a company name
+function isLikelyCompanyName(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  
+  // Common company suffixes and words
+  const companyIndicators = [
+    'llc', 'inc', 'corp', 'corporation', 'company', 'co', 'ltd', 'limited',
+    'group', 'services', 'solutions', 'systems', 'technologies', 'tech',
+    'enterprises', 'consulting', 'associates', 'partners', 'firm', 'agency',
+    'studio', 'design', 'marketing', 'media', 'communications', 'bank',
+    'financial', 'insurance', 'real estate', 'construction', 'manufacturing',
+    'retail', 'restaurant', 'hotel', 'hospital', 'clinic', 'school',
+    'university', 'college', 'institute', 'center', 'centre', 'foundation',
+    'express', 'auto', 'car', 'wash', 'store', 'shop', 'market'
+  ];
+  
+  // Check if it contains company indicators
+  if (companyIndicators.some(indicator => lowerText.includes(indicator))) {
+    return true;
+  }
+  
+  // Check if it has multiple words (many company names do)
+  const words = text.trim().split(/\s+/);
+  if (words.length >= 2 && words.length <= 6) {
+    // Check if it doesn't look like a person's name (no common first names)
+    const commonFirstNames = ['john', 'jane', 'michael', 'sarah', 'david', 'mary', 'chris', 'jennifer'];
+    const firstWord = words[0].toLowerCase();
+    if (!commonFirstNames.includes(firstWord)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 // Check if text has special characters indicating contact info
