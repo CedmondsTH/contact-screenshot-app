@@ -51,14 +51,27 @@ export function parseEmailSignature(text: string): ContactData {
   // Extract other URLs (website)
   const urls = text.match(URL_REGEX);
   if (urls && urls.length > 0) {
-    // Filter out LinkedIn URLs and email addresses to get website
-    const websiteUrls = urls.filter(url => 
-      !url.match(LINKEDIN_URL_REGEX) && 
-      !url.includes('@') && 
-      !url.match(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/)
-    );
+    // Filter out LinkedIn URLs and find the best website URL
+    const websiteUrls = urls.filter(url => !url.match(LINKEDIN_URL_REGEX));
+    
     if (websiteUrls.length > 0) {
-      let website = websiteUrls[0];
+      // Prefer URLs that start with www. or have http/https
+      let website = websiteUrls.find(url => url.startsWith('www.') || url.startsWith('http')) || websiteUrls[0];
+      
+      // Skip if it's just the email domain without www
+      if (contactData.email) {
+        const emailDomain = contactData.email.split('@')[1];
+        if (website === emailDomain && !website.startsWith('www.')) {
+          // Look for www version
+          const wwwVersion = websiteUrls.find(url => url.startsWith('www.'));
+          if (wwwVersion) {
+            website = wwwVersion;
+          } else {
+            website = 'www.' + website;
+          }
+        }
+      }
+      
       // Ensure website has protocol
       if (!website.startsWith('http')) {
         website = 'https://' + website;
@@ -285,7 +298,7 @@ function hasSpecialChars(text: string): boolean {
 function parseAddress(text: string): string | null {
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
-  // Look for complete address lines with city, state, zip
+  // Look for complete address lines with city, state, zip (like "Paducah, KY 42001")
   for (const line of lines) {
     const zipMatches = line.match(ZIP_REGEX);
     const stateMatches = line.match(STATE_REGEX);
@@ -296,28 +309,30 @@ function parseAddress(text: string): string | null {
     }
   }
   
-  // Look for street addresses
-  const streetAddresses = text.match(ADDRESS_REGEX);
-  if (streetAddresses && streetAddresses.length > 0) {
-    const streetAddress = streetAddresses[0];
-    
-    // Try to find the complete address by looking for zip codes and states
-    const zipCodes = text.match(ZIP_REGEX);
-    const states = text.match(STATE_REGEX);
-    
-    if (zipCodes && states) {
-      // Try to find the line that contains the full address
-      for (const line of lines) {
-        if (line.includes(streetAddress) || (zipCodes.some(zip => line.includes(zip)) && states.some(state => line.includes(state)))) {
-          return line;
+  // Look for street address lines (like "3510 Park Avenue")
+  for (const line of lines) {
+    if (/^\d+\s+/.test(line) && /\b(?:avenue|ave|street|st|drive|dr|road|rd|lane|ln|park|way|court|ct|place|pl|boulevard|blvd|circle|cir|parkway|pkwy)\b/i.test(line)) {
+      // Found a street address, try to combine with city/state/zip if on next lines
+      const lineIndex = lines.indexOf(line);
+      let fullAddress = line;
+      
+      // Check next few lines for city, state, zip
+      for (let i = lineIndex + 1; i < Math.min(lineIndex + 3, lines.length); i++) {
+        const nextLine = lines[i];
+        const hasZip = ZIP_REGEX.test(nextLine);
+        const hasState = STATE_REGEX.test(nextLine);
+        
+        if (hasZip || hasState || /^[A-Za-z\s,]+$/.test(nextLine)) {
+          fullAddress += ', ' + nextLine;
+          if (hasZip && hasState) break; // Found complete address
         }
       }
+      
+      return fullAddress;
     }
-    
-    return streetAddress;
   }
   
-  // Look for lines that might be addresses (contain numbers and common address words)
+  // Fallback: look for any line with numbers and address keywords
   for (const line of lines) {
     if (/\d+/.test(line) && /\b(?:avenue|ave|street|st|drive|dr|road|rd|lane|ln|park|way|court|ct|place|pl|boulevard|blvd|circle|cir)\b/i.test(line)) {
       return line;
