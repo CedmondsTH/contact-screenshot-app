@@ -1,93 +1,109 @@
 # Contact Screenshot App
 
-A Next.js application that converts screenshots of email signatures and LinkedIn profiles into VCF contact cards using advanced OCR technology.
+Convert email signatures and LinkedIn profiles into downloadable contact cards (.vcf files) using OCR technology.
 
-## Features
+## 🚀 **Live Demo**
+Deploy this app to see it in action!
 
-- **Advanced OCR Processing**: Uses Google Cloud Vision API (primary) with Tesseract.js fallback
-- **Smart Contact Parsing**: Extracts names, emails, phone numbers, companies, and job titles
-- **Ultra-Conservative LinkedIn Detection**: Only includes LinkedIn URLs that are explicitly found and validated
-- **VCF Export**: Generates standard VCF contact cards for easy import
-- **Drag & Drop Interface**: Easy file upload with progress tracking
-- **Real-time Processing**: Fast OCR processing with visual feedback
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/CedmondsTH/contact-screenshot-app)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/contact-screenshot-app)
 
-## Technology Stack
+## ✨ **Features**
 
-- **Frontend**: Next.js 15.3.4, React, TypeScript
-- **Styling**: Tailwind CSS
-- **OCR**: Google Cloud Vision API, Tesseract.js
-- **File Processing**: VCF generation, Base64 encoding
+- 📧 **Email Signature Processing**: Extract contact info from email signature screenshots
+- 💼 **LinkedIn Profile Processing**: Convert LinkedIn profiles to contact cards  
+- 📱 **VCF File Generation**: Compatible with Outlook, Apple Contacts, and more
+- 🖼️ **Drag & Drop Upload**: Easy file upload with preview
+- 📋 **Clipboard Support**: Paste screenshots directly with Ctrl+V
+- ✏️ **Editable Fields**: Review and edit extracted information before download
+- 🏠 **Address Support**: Automatically detect and include addresses
+- 🔍 **OCR Technology**: Powered by Tesseract.js for accurate text extraction
+- 📦 **Batch Processing**: Download multiple contacts at once
 
-## Setup Instructions
+## 🛠️ **Quick Start**
 
 ### Prerequisites
-- Node.js 18+ installed
-- Google Cloud API key (for Vision API)
+- Node.js 18+ 
+- npm or yarn
 
 ### Installation
-
-1. Clone the repository:
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/CedmondsTH/contact-screenshot-app.git
 cd contact-screenshot-app
-```
-
-2. Install dependencies:
-```bash
 npm install
-```
-
-3. Create environment file:
-```bash
-# Create .env.local file
-echo "GOOGLE_CLOUD_API_KEY=your_api_key_here" > .env.local
-```
-
-4. Run the development server:
-```bash
 npm run dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Environment Variables
+## 📱 **How to Use**
 
-- `GOOGLE_CLOUD_API_KEY`: Your Google Cloud Vision API key (required for best OCR accuracy)
+1. **Take a Screenshot**: Use `Win + Shift + S` on Windows to capture email signatures or LinkedIn profiles
+2. **Paste or Upload**: Press `Ctrl + V` to paste directly, or drag & drop image files
+3. **Review & Edit**: Check the extracted information and make any necessary corrections
+4. **Download**: Get your VCF contact card(s) ready for import
 
-## Deployment
+## 🏗️ **Tech Stack**
 
-### Railway Deployment
+- **Framework**: Next.js 15 with App Router
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **OCR**: Tesseract.js
+- **Contact Cards**: vcards-js
+- **File Handling**: react-dropzone
 
-1. Connect your GitHub repository to Railway
-2. Set the environment variable `GOOGLE_CLOUD_API_KEY` in Railway dashboard
-3. Railway will automatically build and deploy your app
+## 🚀 **Deployment**
 
-### Build Commands
-- Build: `npm run build`
-- Start: `npm start`
-- Dev: `npm run dev`
+### Vercel (Recommended)
+1. Fork this repository
+2. Connect your GitHub account to [Vercel](https://vercel.com)
+3. Import the project - Vercel will auto-configure everything
+4. Deploy with one click!
 
-## Usage
+### Railway
+1. Connect your GitHub account to [Railway](https://railway.app)
+2. Deploy from GitHub repo
+3. Railway will use the included `railway.json` configuration
 
-1. **Upload Screenshots**: Drag and drop or click to upload screenshots of email signatures or LinkedIn profiles
-2. **Processing**: The app uses Google Cloud Vision API for high-accuracy OCR
-3. **Review Results**: Check the extracted contact information
-4. **Download VCF**: Click "Download VCF" to save the contact card
+### Other Platforms
+The app works on any platform that supports Next.js:
+- Netlify
+- AWS Amplify  
+- Digital Ocean App Platform
+- Heroku
 
-## OCR Accuracy
+## 🔧 **Environment Variables**
+No environment variables required! The app runs entirely client-side for privacy.
 
-- **Google Cloud Vision API**: ~95% accuracy
-- **Tesseract.js Fallback**: ~70% accuracy
-- **Processing Time**: ~800ms average
+## 📄 **Recent Updates**
 
-## LinkedIn URL Validation
+- ✅ Added address field support
+- ✅ Fixed contact editing functionality  
+- ✅ Improved VCF format compatibility
+- ✅ Enhanced phone number display in Outlook
+- ✅ Removed app branding from contact notes
+- ✅ Added clipboard paste support
+- ✅ Improved OCR accuracy for LinkedIn profiles
 
-The app uses ultra-conservative LinkedIn URL detection:
-- URLs must be explicitly found in the screenshot
-- Profile names must match the detected person's name
-- Strict format validation prevents false positives
-- Better to have no LinkedIn URL than the wrong one
+## 🤝 **Contributing**
 
-## License
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-MIT License - feel free to use this project for your own purposes. 
+## 📝 **License**
+
+MIT License - feel free to use this project for personal or commercial purposes.
+
+## 🆘 **Support**
+
+If you encounter any issues:
+1. Check the browser console for errors
+2. Ensure you're using a modern browser with clipboard API support
+3. Try with different image formats (PNG, JPG, WebP)
+4. Make sure images are clear and text is readable
+
+---
+
+Built with ❤️ using Next.js, Tailwind CSS, and Tesseract.js OCR 
