@@ -15,6 +15,7 @@ interface ExtractedContact {
   company?: string;
   title?: string;
   website?: string;
+  address?: string;
   linkedIn?: string;
   rawText?: string;
   confidence: number;
@@ -291,14 +292,84 @@ export default function OCRProcessor({ files, onComplete, onError }: OCRProcesso
       console.log('No LinkedIn URLs found in OCR text');
     }
 
-    // Extract other URLs (website)
+    // Extract website URLs (enhanced with www. detection)
     const urls = text.match(urlRegex);
-    if (urls && urls.length > 0) {
-      const websiteUrls = urls.filter(url => !url.match(linkedinRegex));
+    const wwwRegex = /(?:www\.)[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/g;
+    const wwwUrls = text.match(wwwRegex);
+    
+    let allUrls: string[] = [];
+    if (urls) allUrls = allUrls.concat(urls);
+    if (wwwUrls) allUrls = allUrls.concat(wwwUrls.map(url => `https://${url}`));
+    
+    if (allUrls.length > 0) {
+      // Filter out LinkedIn URLs and email domains
+      const websiteUrls = allUrls.filter(url => {
+        const urlLower = url.toLowerCase();
+        return !urlLower.includes('linkedin.com') && 
+               !urlLower.includes('gmail.com') && 
+               !urlLower.includes('yahoo.com') && 
+               !urlLower.includes('outlook.com') && 
+               !urlLower.includes('hotmail.com');
+      });
+      
       if (websiteUrls.length > 0) {
-        contact.website = websiteUrls[0];
+        // Prefer www. versions if available
+        const wwwVersion = websiteUrls.find(url => url.includes('www.'));
+        contact.website = wwwVersion || websiteUrls[0];
       }
     }
+
+    // Extract address (enhanced multi-line parsing)
+    const parseAddress = (lines: string[]): string | undefined => {
+      // Address patterns
+      const streetRegex = /^\d+\s+[A-Za-z\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Boulevard|Blvd|Court|Ct|Place|Pl|Way|Circle|Cir|Parkway|Pkwy|Trail|Tr)\.?\s*,?\s*$/i;
+      const zipRegex = /\b\d{5}(?:-\d{4})?\b/;
+      const stateRegex = /\b[A-Z]{2}\b/;
+      const cityStateZipRegex = /^[A-Za-z\s,.-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\s*$/;
+      
+      let streetAddress = '';
+      let cityStateZip = '';
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Check if this line looks like a street address
+        if (streetRegex.test(line)) {
+          streetAddress = line;
+          
+          // Look for city, state, zip in the next few lines
+          for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+            const nextLine = lines[j].trim();
+            if (cityStateZipRegex.test(nextLine)) {
+              cityStateZip = nextLine;
+              break;
+            }
+            // Also check if city/state/zip might be split
+            if (zipRegex.test(nextLine) && stateRegex.test(nextLine)) {
+              cityStateZip = nextLine;
+              break;
+            }
+          }
+          
+          if (streetAddress && cityStateZip) {
+            return `${streetAddress}, ${cityStateZip}`.replace(/,\s*,/g, ',').trim();
+          }
+        }
+        
+        // Also check for complete addresses in a single line
+        if (zipRegex.test(line) && stateRegex.test(line) && line.length > 20) {
+          // This might be a complete address
+          const parts = line.split(',').map(p => p.trim());
+          if (parts.length >= 3) {
+            return line;
+          }
+        }
+      }
+      
+      return undefined;
+    };
+    
+    contact.address = parseAddress(lines);
 
     // Enhanced parsing for LinkedIn profiles and email signatures
     if (isLinkedInProfile) {
