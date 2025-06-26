@@ -7,9 +7,9 @@ const URL_REGEX = /(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-
 const LINKEDIN_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[^\s<>"{}|\\^`[\]]+/gi;
 
 // Address patterns
-const ADDRESS_REGEX = /\d+\s+[A-Za-z0-9\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl)/gi;
+const ADDRESS_REGEX = /\d+\s+[A-Za-z0-9\s,.-]*(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl|Park|Circle|Cir|Parkway|Pkwy)\b/gi;
 const ZIP_REGEX = /\b\d{5}(?:-\d{4})?\b/g;
-const STATE_REGEX = /\b[A-Z]{2}\b|\b(?:Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming)\b/gi;
+const STATE_REGEX = /\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/gi;
 
 // Common title keywords for job titles
 const TITLE_KEYWORDS = [
@@ -35,7 +35,10 @@ export function parseEmailSignature(text: string): ContactData {
   if (phones && phones.length > 0) {
     contactData.phone = phones[0];
     if (phones.length > 1) {
-      contactData.mobilePhone = phones[1];
+      contactData.workPhone = phones[1];
+    }
+    if (phones.length > 2) {
+      contactData.mobilePhone = phones[2];
     }
   }
   
@@ -48,10 +51,19 @@ export function parseEmailSignature(text: string): ContactData {
   // Extract other URLs (website)
   const urls = text.match(URL_REGEX);
   if (urls && urls.length > 0) {
-    // Filter out LinkedIn URLs to get website
-    const websiteUrls = urls.filter(url => !url.match(LINKEDIN_URL_REGEX));
+    // Filter out LinkedIn URLs and email addresses to get website
+    const websiteUrls = urls.filter(url => 
+      !url.match(LINKEDIN_URL_REGEX) && 
+      !url.includes('@') && 
+      !url.match(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/)
+    );
     if (websiteUrls.length > 0) {
-      contactData.website = websiteUrls[0];
+      let website = websiteUrls[0];
+      // Ensure website has protocol
+      if (!website.startsWith('http')) {
+        website = 'https://' + website;
+      }
+      contactData.website = website;
     }
   }
   
@@ -273,6 +285,17 @@ function hasSpecialChars(text: string): boolean {
 function parseAddress(text: string): string | null {
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
+  // Look for complete address lines with city, state, zip
+  for (const line of lines) {
+    const zipMatches = line.match(ZIP_REGEX);
+    const stateMatches = line.match(STATE_REGEX);
+    
+    // If line contains both state and zip, it's likely a complete address
+    if (zipMatches && stateMatches) {
+      return line;
+    }
+  }
+  
   // Look for street addresses
   const streetAddresses = text.match(ADDRESS_REGEX);
   if (streetAddresses && streetAddresses.length > 0) {
@@ -294,13 +317,9 @@ function parseAddress(text: string): string | null {
     return streetAddress;
   }
   
-  // Look for lines that contain city, state, zip patterns
+  // Look for lines that might be addresses (contain numbers and common address words)
   for (const line of lines) {
-    const zipMatches = line.match(ZIP_REGEX);
-    const stateMatches = line.match(STATE_REGEX);
-    
-    if (zipMatches && stateMatches) {
-      // This line likely contains address information
+    if (/\d+/.test(line) && /\b(?:avenue|ave|street|st|drive|dr|road|rd|lane|ln|park|way|court|ct|place|pl|boulevard|blvd|circle|cir)\b/i.test(line)) {
       return line;
     }
   }
