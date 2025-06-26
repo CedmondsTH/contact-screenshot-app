@@ -6,6 +6,11 @@ const PHONE_REGEX = /(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g;
 const LINKEDIN_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[^\s<>"{}|\\^`[\]]+/gi;
 
+// Address patterns
+const ADDRESS_REGEX = /\d+\s+[A-Za-z0-9\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl)/gi;
+const ZIP_REGEX = /\b\d{5}(?:-\d{4})?\b/g;
+const STATE_REGEX = /\b[A-Z]{2}\b|\b(?:Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming)\b/gi;
+
 // Common title keywords for job titles
 const TITLE_KEYWORDS = [
   'manager', 'director', 'executive', 'president', 'ceo', 'cto', 'cfo',
@@ -48,6 +53,12 @@ export function parseEmailSignature(text: string): ContactData {
     if (websiteUrls.length > 0) {
       contactData.website = websiteUrls[0];
     }
+  }
+  
+  // Extract address information
+  const addressInfo = parseAddress(text);
+  if (addressInfo) {
+    contactData.address = addressInfo;
   }
   
   // Parse name, title, and company from lines
@@ -198,6 +209,45 @@ function containsTitleKeywords(text: string): boolean {
 // Check if text has special characters indicating contact info
 function hasSpecialChars(text: string): boolean {
   return /[@|+().-]/.test(text);
+}
+
+// Parse address information from text
+function parseAddress(text: string): string | null {
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  // Look for street addresses
+  const streetAddresses = text.match(ADDRESS_REGEX);
+  if (streetAddresses && streetAddresses.length > 0) {
+    const streetAddress = streetAddresses[0];
+    
+    // Try to find the complete address by looking for zip codes and states
+    const zipCodes = text.match(ZIP_REGEX);
+    const states = text.match(STATE_REGEX);
+    
+    if (zipCodes && states) {
+      // Try to find the line that contains the full address
+      for (const line of lines) {
+        if (line.includes(streetAddress) || (zipCodes.some(zip => line.includes(zip)) && states.some(state => line.includes(state)))) {
+          return line;
+        }
+      }
+    }
+    
+    return streetAddress;
+  }
+  
+  // Look for lines that contain city, state, zip patterns
+  for (const line of lines) {
+    const zipMatches = line.match(ZIP_REGEX);
+    const stateMatches = line.match(STATE_REGEX);
+    
+    if (zipMatches && stateMatches) {
+      // This line likely contains address information
+      return line;
+    }
+  }
+  
+  return null;
 }
 
 // Check if text contains contact information
