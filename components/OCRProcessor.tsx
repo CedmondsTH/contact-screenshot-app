@@ -12,10 +12,16 @@ interface ExtractedContact {
   fullName?: string;
   email?: string;
   phone?: string;
+  mobilePhone?: string;
+  workPhone?: string;
+  homePhone?: string;
   company?: string;
   title?: string;
   website?: string;
   address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   linkedIn?: string;
   rawText?: string;
   confidence: number;
@@ -200,11 +206,85 @@ export default function OCRProcessor({ files, onComplete, onError }: OCRProcesso
       }
     }
 
-    // Extract phone
-    const phones = text.match(phoneRegex);
-    if (phones && phones.length > 0) {
-      contact.phone = phones[0];
-    }
+    // Extract phone numbers with type detection
+    const extractPhoneNumbers = (text: string): void => {
+      // Enhanced phone regex to capture more formats
+      const phoneRegex = /(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})(?:\s*(?:ext|x|extension)\.?\s*\d+)?/gi;
+      
+      const phoneMatches = [];
+      let match;
+      while ((match = phoneRegex.exec(text)) !== null) {
+        phoneMatches.push({
+          number: match[0],
+          index: match.index
+        });
+      }
+      
+      if (phoneMatches.length === 0) return;
+      
+      // Analyze context around each phone number to determine type
+      for (const phoneMatch of phoneMatches) {
+        const { number, index } = phoneMatch;
+        
+        // Get context around the phone number (50 characters before and after)
+        const contextStart = Math.max(0, index - 50);
+        const contextEnd = Math.min(text.length, index + number.length + 50);
+        const context = text.substring(contextStart, contextEnd).toLowerCase();
+        
+        // Clean and format the phone number
+        const cleanNumber = number.replace(/\D/g, '').replace(/^1/, '');
+        let formattedNumber = number;
+        if (cleanNumber.length === 10) {
+          formattedNumber = `(${cleanNumber.slice(0, 3)}) ${cleanNumber.slice(3, 6)}-${cleanNumber.slice(6)}`;
+        }
+        
+        // Determine phone type based on context keywords
+        const mobileKeywords = ['mobile', 'cell', 'cellular', 'personal', 'text', 'sms'];
+        const workKeywords = ['work', 'office', 'business', 'direct', 'desk', 'corp', 'company'];
+        const homeKeywords = ['home', 'house', 'residence', 'personal'];
+        
+        const isMobile = mobileKeywords.some(keyword => context.includes(keyword));
+        const isWork = workKeywords.some(keyword => context.includes(keyword));
+        const isHome = homeKeywords.some(keyword => context.includes(keyword));
+        
+        // Look for specific patterns including common abbreviations
+        const mobilePattern = /(?:mobile|cell|cellular|personal|m\b|c\b)[\s:]*(?:phone|number|#)?[\s:]*$/i;
+        const workPattern = /(?:work|office|business|direct|desk|w\b|o\b)[\s:]*(?:phone|number|#)?[\s:]*$/i;
+        const homePattern = /(?:home|house|residence|h\b)[\s:]*(?:phone|number|#)?[\s:]*$/i;
+        
+        const beforeContext = text.substring(Math.max(0, index - 30), index);
+        const isMobilePattern = mobilePattern.test(beforeContext);
+        const isWorkPattern = workPattern.test(beforeContext);
+        const isHomePattern = homePattern.test(beforeContext);
+        
+        // Assign to appropriate field based on priority and availability
+        if (isMobilePattern || (isMobile && !contact.mobilePhone)) {
+          contact.mobilePhone = formattedNumber;
+        } else if (isWorkPattern || (isWork && !contact.workPhone)) {
+          contact.workPhone = formattedNumber;
+        } else if (isHomePattern || (isHome && !contact.homePhone)) {
+          contact.homePhone = formattedNumber;
+        } else if (!contact.phone) {
+          // Default assignment - if no context clues, assign to primary phone
+          contact.phone = formattedNumber;
+        } else if (!contact.workPhone && !isMobile && !isHome) {
+          // If we already have a primary phone and this doesn't seem mobile/home, assume work
+          contact.workPhone = formattedNumber;
+        } else if (!contact.mobilePhone) {
+          // Last resort - assign to mobile if nothing else fits
+          contact.mobilePhone = formattedNumber;
+        }
+      }
+      
+      // Special case: If we only found one phone number and it's in workPhone,
+      // move it to the primary phone field if primary is empty
+      if (!contact.phone && contact.workPhone && !contact.mobilePhone) {
+        contact.phone = contact.workPhone;
+        contact.workPhone = undefined;
+      }
+    };
+    
+    extractPhoneNumbers(text);
 
     // Extract LinkedIn URL (ULTRA CONSERVATIVE - only if explicitly found with person's name validation)
     const linkedinUrls = text.match(linkedinRegex);
@@ -319,57 +399,97 @@ export default function OCRProcessor({ files, onComplete, onError }: OCRProcesso
       }
     }
 
-    // Extract address (enhanced multi-line parsing)
-    const parseAddress = (lines: string[]): string | undefined => {
+    // Extract address components separately (enhanced multi-line parsing)
+    const parseAddressComponents = (lines: string[]): void => {
       // Address patterns
       const streetRegex = /^\d+\s+[A-Za-z\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Boulevard|Blvd|Court|Ct|Place|Pl|Way|Circle|Cir|Parkway|Pkwy|Trail|Tr)\.?\s*,?\s*$/i;
-      const zipRegex = /\b\d{5}(?:-\d{4})?\b/;
-      const stateRegex = /\b[A-Z]{2}\b/;
-      const cityStateZipRegex = /^[A-Za-z\s,.-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\s*$/;
+      const zipRegex = /\b(\d{5}(?:-\d{4})?)\b/;
+      const stateRegex = /\b([A-Z]{2})\b/;
+      const cityStateZipRegex = /^([A-Za-z\s,.-]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/;
       
-      let streetAddress = '';
-      let cityStateZip = '';
-      
+      // Look for multi-line address format
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         
         // Check if this line looks like a street address
         if (streetRegex.test(line)) {
-          streetAddress = line;
+          contact.address = line.replace(/,$/, ''); // Remove trailing comma
           
           // Look for city, state, zip in the next few lines
           for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
             const nextLine = lines[j].trim();
-            if (cityStateZipRegex.test(nextLine)) {
-              cityStateZip = nextLine;
-              break;
+            const cityStateZipMatch = nextLine.match(cityStateZipRegex);
+            if (cityStateZipMatch) {
+              contact.city = cityStateZipMatch[1].trim();
+              contact.state = cityStateZipMatch[2];
+              contact.zipCode = cityStateZipMatch[3];
+              return;
             }
-            // Also check if city/state/zip might be split
-            if (zipRegex.test(nextLine) && stateRegex.test(nextLine)) {
-              cityStateZip = nextLine;
-              break;
+            
+            // Also check if city/state/zip might be in separate parts
+            const zipMatch = nextLine.match(zipRegex);
+            const stateMatch = nextLine.match(stateRegex);
+            if (zipMatch && stateMatch) {
+              contact.zipCode = zipMatch[1];
+              contact.state = stateMatch[1];
+              // Try to extract city (everything before state)
+              const beforeState = nextLine.substring(0, nextLine.indexOf(stateMatch[1])).trim().replace(/,$/, '');
+              if (beforeState.length > 0) {
+                contact.city = beforeState;
+              }
+              return;
             }
-          }
-          
-          if (streetAddress && cityStateZip) {
-            return `${streetAddress}, ${cityStateZip}`.replace(/,\s*,/g, ',').trim();
           }
         }
         
         // Also check for complete addresses in a single line
         if (zipRegex.test(line) && stateRegex.test(line) && line.length > 20) {
-          // This might be a complete address
-          const parts = line.split(',').map(p => p.trim());
-          if (parts.length >= 3) {
-            return line;
+          // Try to parse complete address like "1229 Augusta West Parkway Augusta, GA 30909"
+          const zipMatch = line.match(zipRegex);
+          const stateMatch = line.match(stateRegex);
+          
+          if (zipMatch && stateMatch) {
+            contact.zipCode = zipMatch[1];
+            contact.state = stateMatch[1];
+            
+            // Find the state position and work backwards to find city and street
+            const stateIndex = line.indexOf(stateMatch[1]);
+            const beforeState = line.substring(0, stateIndex).trim();
+            
+            // Look for the pattern where city starts (often after last capital letter sequence)
+            // Split by commas first
+            const parts = beforeState.split(',');
+            if (parts.length >= 2) {
+              // Street address is everything before the last comma
+              contact.address = parts.slice(0, -1).join(',').trim();
+              // City is the last part before state
+              contact.city = parts[parts.length - 1].trim();
+            } else {
+              // No comma, try to identify where street ends and city begins
+              // Look for pattern: numbers and street words, then city name
+              const streetMatch = beforeState.match(/^(\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Boulevard|Blvd|Court|Ct|Place|Pl|Way|Circle|Cir|Parkway|Pkwy|Trail|Tr)\.?)\s+(.+)$/i);
+              if (streetMatch) {
+                contact.address = streetMatch[1].trim();
+                contact.city = streetMatch[2].trim();
+              } else {
+                // Fallback: assume last word(s) are city
+                const words = beforeState.split(' ');
+                if (words.length >= 3) {
+                  // Take last 1-2 words as city, rest as street
+                  const cityWords = words.slice(-2);
+                  const streetWords = words.slice(0, -2);
+                  contact.address = streetWords.join(' ');
+                  contact.city = cityWords.join(' ');
+                }
+              }
+            }
+            return;
           }
         }
       }
-      
-      return undefined;
     };
     
-    contact.address = parseAddress(lines);
+    parseAddressComponents(lines);
 
     // Enhanced parsing for LinkedIn profiles and email signatures
     if (isLinkedInProfile) {
@@ -389,7 +509,16 @@ export default function OCRProcessor({ files, onComplete, onError }: OCRProcesso
       
       if (potentialNames.length > 0) {
         // Pick the line that looks most like a name (has spaces, proper length)
-        contact.fullName = potentialNames.find(name => name.includes(' ')) || potentialNames[0];
+        let selectedName = potentialNames.find(name => name.includes(' ')) || potentialNames[0];
+        
+        // Clean any embedded email addresses from the name
+        selectedName = selectedName.replace(/\s*\([^)]*@[^)]*\)\s*/g, '');
+        selectedName = selectedName.replace(/\s+[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\s*$/g, '');
+        selectedName = selectedName.replace(/[,\s]+$/, '').trim();
+        
+        if (selectedName.length > 3) {
+          contact.fullName = selectedName;
+        }
       }
     } else {
       // Enhanced parsing for email signatures
@@ -416,14 +545,26 @@ export default function OCRProcessor({ files, onComplete, onError }: OCRProcesso
         if (cleanLine.length > 3 && cleanLine.length < 50 && 
             !lineLower.includes('connect') && !lineLower.includes('follow')) {
           
+          // Clean the line to remove any email addresses that might be embedded
+          let nameOnly = cleanLine;
+          
+          // Remove email addresses in parentheses like "John Doe (john@example.com)"
+          nameOnly = nameOnly.replace(/\s*\([^)]*@[^)]*\)\s*/g, '');
+          
+          // Remove email addresses that might be at the end like "John Doe john@example.com"
+          nameOnly = nameOnly.replace(/\s+[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\s*$/g, '');
+          
+          // Remove any remaining trailing punctuation
+          nameOnly = nameOnly.replace(/[,\s]+$/, '').trim();
+          
           // Prefer lines that look like names (contain spaces, proper case)
-          if (cleanLine.includes(' ') && /^[A-Z]/.test(cleanLine)) {
-            contact.fullName = cleanLine;
+          if (nameOnly.includes(' ') && /^[A-Z]/.test(nameOnly) && nameOnly.length > 3) {
+            contact.fullName = nameOnly;
             nameFound = true;
             break;
-          } else if (!nameFound && cleanLine.length > 5) {
+          } else if (!nameFound && nameOnly.length > 5) {
             // Fallback if no spaced name found
-            contact.fullName = cleanLine;
+            contact.fullName = nameOnly;
             nameFound = true;
           }
         }

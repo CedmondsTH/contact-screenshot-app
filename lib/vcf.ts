@@ -37,35 +37,35 @@ export function generateVCF(contact: ContactData, options: VCFOptions = {}): Blo
     card.email = contact.email;
   }
   
-  // Handle phone numbers
-  if (contact.phone) {
+  // Handle phone numbers with proper type assignment
+  if (contact.mobilePhone) {
+    card.cellPhone = contact.mobilePhone;
+  } else if (contact.phone) {
+    // If no specific mobile phone, use general phone as mobile
     card.cellPhone = contact.phone;
-  }
-  
-  if (contact.mobilePhone && contact.mobilePhone !== contact.phone) {
-    card.homePhone = contact.mobilePhone;
   }
   
   if (contact.workPhone) {
     card.workPhone = contact.workPhone;
   }
   
-  // Set URLs
+  // Handle home phone
+  if (contact.homePhone) {
+    card.homePhone = contact.homePhone;
+  } else if (contact.phone && contact.mobilePhone && contact.phone !== contact.mobilePhone) {
+    // If we have both phone and mobilePhone, and they're different, use phone as home
+    card.homePhone = contact.phone;
+  }
+  
+  // Set company website URL (not LinkedIn)
   if (contact.website) {
     card.url = contact.website;
   }
   
-  // Add LinkedIn URL as a social profile
-  if (contact.linkedIn) {
-    // Add LinkedIn URL to the URL field with a label
-    if (!contact.website) {
-      card.url = contact.linkedIn;
-    }
-    // Also add as a note if we have custom fields enabled
-    if (options.includeNotes !== false) {
-      const existingNote = card.note || '';
-      card.note = existingNote ? `${existingNote}\nLinkedIn: ${contact.linkedIn}` : `LinkedIn: ${contact.linkedIn}`;
-    }
+  // Add LinkedIn URL to notes section only
+  if (contact.linkedIn && options.includeNotes !== false) {
+    const existingNote = card.note || '';
+    card.note = existingNote ? `${existingNote}\nLinkedIn: ${contact.linkedIn}` : `LinkedIn: ${contact.linkedIn}`;
   }
   
   // Set address if available
@@ -161,8 +161,40 @@ export function generateBatchVCF(contacts: ContactData[], options: VCFOptions = 
     if (contact.company) card.organization = contact.company;
     if (contact.title) card.title = contact.title;
     if (contact.email) card.email = contact.email;
-    if (contact.phone) card.cellPhone = contact.phone;
     if (contact.website) card.url = contact.website;
+    
+    // Handle phone numbers with proper type assignment in batch VCF
+    if (contact.mobilePhone) {
+      card.cellPhone = contact.mobilePhone;
+    } else if (contact.phone) {
+      card.cellPhone = contact.phone;
+    }
+    
+    if (contact.workPhone) {
+      card.workPhone = contact.workPhone;
+    }
+    
+    if (contact.homePhone) {
+      card.homePhone = contact.homePhone;
+    } else if (contact.phone && contact.mobilePhone && contact.phone !== contact.mobilePhone) {
+      card.homePhone = contact.phone;
+    }
+    
+    // Add address fields to batch VCF
+    if (contact.address || contact.city || contact.state || contact.zipCode || contact.country) {
+      card.homeAddress.label = 'Home Address';
+      card.homeAddress.street = contact.address || '';
+      card.homeAddress.city = contact.city || '';
+      card.homeAddress.stateProvince = contact.state || '';
+      card.homeAddress.postalCode = contact.zipCode || '';
+      card.homeAddress.countryRegion = contact.country || '';
+    }
+    
+    // Add LinkedIn to notes in batch VCF as well
+    if (contact.linkedIn) {
+      const existingNote = card.note || '';
+      card.note = existingNote ? `${existingNote}\nLinkedIn: ${contact.linkedIn}` : `LinkedIn: ${contact.linkedIn}`;
+    }
     
     return card.getFormattedString();
   });

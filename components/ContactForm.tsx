@@ -30,15 +30,50 @@ export default function ContactForm({ contacts, onStartOver }: ContactFormProps)
                 readOnly
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Phone:</label>
-              <input 
-                type="tel" 
-                value={contact.phone || ''} 
-                className="input-field"
-                readOnly
-              />
-            </div>
+            {contact.phone && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Phone:</label>
+                <input 
+                  type="tel" 
+                  value={contact.phone || ''} 
+                  className="input-field"
+                  readOnly
+                />
+              </div>
+            )}
+            {contact.mobilePhone && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Mobile:</label>
+                <input 
+                  type="tel" 
+                  value={contact.mobilePhone || ''} 
+                  className="input-field"
+                  readOnly
+                />
+              </div>
+            )}
+            {contact.workPhone && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Work Phone:</label>
+                <input 
+                  type="tel" 
+                  value={contact.workPhone || ''} 
+                  className="input-field"
+                  readOnly
+                />
+              </div>
+            )}
+            {contact.homePhone && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Home Phone:</label>
+                <input 
+                  type="tel" 
+                  value={contact.homePhone || ''} 
+                  className="input-field"
+                  readOnly
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium mb-1">Company:</label>
               <input 
@@ -57,6 +92,87 @@ export default function ContactForm({ contacts, onStartOver }: ContactFormProps)
                 readOnly
               />
             </div>
+            {contact.linkedIn && (
+              <div>
+                <label className="block text-sm font-medium mb-1">LinkedIn:</label>
+                <input 
+                  type="url" 
+                  value={contact.linkedIn || ''} 
+                  className="input-field"
+                  readOnly
+                />
+              </div>
+            )}
+            {contact.website && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Website:</label>
+                <input 
+                  type="url" 
+                  value={contact.website || ''} 
+                  className="input-field"
+                  readOnly
+                />
+              </div>
+            )}
+            {contact.headline && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">LinkedIn Headline:</label>
+                <input 
+                  type="text" 
+                  value={contact.headline || ''} 
+                  className="input-field"
+                  readOnly
+                />
+              </div>
+            )}
+            {contact.address && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">Street Address:</label>
+                <input 
+                  type="text" 
+                  value={contact.address || ''} 
+                  className="input-field"
+                  readOnly
+                />
+              </div>
+            )}
+            {(contact.city || contact.state || contact.zipCode) && (
+              <>
+                {contact.city && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">City:</label>
+                    <input 
+                      type="text" 
+                      value={contact.city || ''} 
+                      className="input-field"
+                      readOnly
+                    />
+                  </div>
+                )}
+                {contact.state && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">State:</label>
+                    <input 
+                      type="text" 
+                      value={contact.state || ''} 
+                      className="input-field"
+                      readOnly
+                    />
+                  </div>
+                )}
+                {contact.zipCode && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Zip Code:</label>
+                    <input 
+                      type="text" 
+                      value={contact.zipCode || ''} 
+                      className="input-field"
+                      readOnly
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       ))}

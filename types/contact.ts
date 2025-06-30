@@ -9,6 +9,7 @@ export interface ContactData {
   phone?: string;
   mobilePhone?: string;
   workPhone?: string;
+  homePhone?: string;
   linkedIn?: string;
   website?: string;
   address?: string;
