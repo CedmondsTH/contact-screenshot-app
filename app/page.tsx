@@ -74,7 +74,7 @@ export default function Home() {
         </main>
 
         <footer className="text-center mt-8 text-sm text-muted-foreground fade-in stagger-3">
-          <p>Built with Next.js and Tesseract.js. Styled with Tailwind CSS.</p>
+                        <p>Built by Carson Edmonds</p>
         </footer>
       </div>
     </div>
