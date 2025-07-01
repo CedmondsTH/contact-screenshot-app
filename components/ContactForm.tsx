@@ -86,12 +86,12 @@ export default function ContactForm({ contacts, error, onStartOver }: ContactFor
   return (
     <div className="space-y-8">
       {editableContacts.map((contact, index) => (
-        <div key={index} className="bg-card border border-border rounded-lg p-6">
+        <div key={index} className={`bg-card border border-border rounded-lg p-6 hover-scale card-enter stagger-${Math.min(index + 1, 3)}`}>
           <div className="flex justify-between items-start mb-6">
             <div>
               <h3 className="text-xl font-semibold">Contact Result {index + 1}</h3>
             </div>
-            <button onClick={() => handleDownload(contact)} className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium">
+            <button onClick={() => handleDownload(contact)} className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 glow">
               Download vCard
             </button>
           </div>
@@ -124,7 +124,7 @@ export default function ContactForm({ contacts, error, onStartOver }: ContactFor
       ))}
       
       <div className="text-center pt-4">
-        <button onClick={onStartOver} className="bg-secondary text-secondary-foreground hover:bg-secondary/80 px-6 py-2 rounded-md font-medium">
+        <button onClick={onStartOver} className="bg-secondary text-secondary-foreground hover:bg-secondary/80 px-6 py-2 rounded-md font-medium transition-all duration-200 hover:scale-105">
           Scan Another
         </button>
       </div>

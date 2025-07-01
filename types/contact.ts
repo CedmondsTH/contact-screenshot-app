@@ -11,6 +11,7 @@ export interface ContactData {
   linkedIn?: string;
   website?: string;
   address?: string;
+  street?: string;
   city?: string;
   state?: string;
   zipCode?: string;

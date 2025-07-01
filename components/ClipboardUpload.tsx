@@ -63,9 +63,20 @@ export default function ClipboardUpload({ onFilesPasted }: ClipboardUploadProps)
       <button
         onClick={triggerPaste}
         disabled={isPasting}
-        className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-wait px-6 py-3 rounded-md font-medium"
+        className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-wait px-6 py-3 rounded-md font-medium transition-all duration-200 hover:scale-105"
       >
-        {isPasting ? 'Pasting...' : 'Paste from Clipboard'}
+        {isPasting ? (
+          <span className="flex items-center justify-center">
+            Pasting
+            <span className="loading-dots ml-1">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </span>
+        ) : (
+          'Paste from Clipboard'
+        )}
       </button>
       {error && <p className="text-destructive text-sm mt-2">{error}</p>}
     </div>

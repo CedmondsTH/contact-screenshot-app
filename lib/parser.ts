@@ -1,32 +1,74 @@
 import { ContactData } from '../types/contact';
 
-// Regular expressions for common patterns
-const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi;
-const WEBSITE_REGEX = /(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?)/gi;
-const LINKEDIN_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[^\s<>"{}|\\^`[\]]+/gi;
-const PHONE_REGEX = /(?:\+\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
-const ADDRESS_REGEX = /(\d{1,5}\s+[\w\s.-]+?,\s+[A-Z]{2,}\s+\d{5}(-\d{4})?)/;
+// Regular expressions for parsing
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const PHONE_REGEX = /(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/g;
+const WEBSITE_REGEX = /(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/g;
+const LINKEDIN_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/[^\s]+/g;
 
-const TITLE_KEYWORDS = ['partner', 'president', 'ceo', 'cto', 'cfo', 'vp', 'vice president', 'director', 'manager', 'lead', 'senior', 'associate', 'analyst', 'consultant', 'engineer', 'developer', 'specialist', 'advisor'];
-const COMPANY_SUFFIXES = ['inc', 'llc', 'ltd', 'corp', 'co', 'group', 'advisors', 'holdings', 'corporate', 'capital', 'bank', 'financial'];
+// Title keywords
+const TITLE_KEYWORDS = [
+    'president', 'vice president', 'vp', 'ceo', 'cfo', 'cto', 'director', 'manager', 'partner',
+    'senior', 'lead', 'head', 'chief', 'executive', 'officer', 'coordinator', 'specialist',
+    'analyst', 'consultant', 'advisor', 'associate', 'assistant', 'supervisor', 'administrator'
+];
 
+// Company suffixes
+const COMPANY_SUFFIXES = [
+    'inc', 'corp', 'llc', 'ltd', 'company', 'corporation', 'incorporated', 'limited',
+    'group', 'holdings', 'enterprises', 'solutions', 'services', 'partners'
+];
+
+// Standardize phone number format
 function standardizePhoneNumber(phoneNumber: string): string {
-    const digits = phoneNumber.replace(/[^\d]/g, '');
-    if (digits.length === 10) {
-        return `(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6, 10)}`;
-    }
-    if (digits.length === 11 && (digits.startsWith('1') || digits.startsWith('0'))) {
-        const cleanDigits = digits.substring(1);
-        return `(${cleanDigits.substring(0, 3)}) ${cleanDigits.substring(3, 6)}-${cleanDigits.substring(6, 10)}`;
+    const cleaned = phoneNumber.replace(/\D/g, '');
+    if (cleaned.length === 10) {
+        return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    } else if (cleaned.length === 11 && cleaned[0] === '1') {
+        return `(${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
     }
     return phoneNumber;
 }
 
+// Simple address detection function that WORKS
+function detectAddress(text: string): string | null {
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    
+    // Look for city, state, zip patterns and work backwards
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        // Check if this line matches city, state, zip pattern
+        if (/^[A-Za-z\s]+,\s+[A-Z]{2}\s+\d{5}(-\d{4})?$/.test(line)) {
+            // Found a city/state/zip line, check the previous line for street address
+            if (i > 0) {
+                const prevLine = lines[i - 1];
+                
+                // Check if previous line is a valid street address
+                if (/^\d{1,5}\s+[A-Za-z]/.test(prevLine) && 
+                    !prevLine.toLowerCase().includes('phone') &&
+                    !prevLine.toLowerCase().includes('email') &&
+                    !prevLine.toLowerCase().includes('www') &&
+                    !prevLine.includes('@')) {
+                    
+                    return `${prevLine}, ${line}`;
+                }
+            }
+            
+            // If no valid street address above, return just city/state/zip
+            return line;
+        }
+    }
+    
+    return null;
+}
+
+// Main parsing function
 export function parseEmailSignature(text: string): ContactData {
     const parsed: ContactData = {};
     const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
 
-    // Store raw text for reference
+    // Store raw text
     parsed.rawText = text;
 
     // Extract email
@@ -35,130 +77,95 @@ export function parseEmailSignature(text: string): ContactData {
         parsed.email = emailMatch[0];
     }
 
-    // Extract LinkedIn
-    const linkedinMatch = text.match(LINKEDIN_URL_REGEX);
-    if (linkedinMatch) {
-        parsed.linkedIn = linkedinMatch[0];
-    }
-
-    // Extract website
-    const websiteMatches = text.match(WEBSITE_REGEX);
-    if (websiteMatches) {
-        const sites = websiteMatches.filter(
-            (site) =>
-            (!parsed.email || !site.includes(parsed.email.split('@')[1])) &&
-            !site.includes('linkedin.com') &&
-            site.includes('.')
-        );
-        if (sites.length > 0) {
-            parsed.website = sites.sort((a, b) => b.length - a.length)[0];
-        }
-    }
-    
-    // Extract address
-    const addressMatch = text.match(ADDRESS_REGEX);
-    if (addressMatch) {
-        parsed.address = addressMatch[0].replace(/, ,/g, ',').trim();
-    }
-    
-    // Extract and categorize phone numbers
-    const allPhones: { number: string; line: string }[] = [];
-    lines.forEach(line => {
-        const phones = line.match(PHONE_REGEX);
-        if (phones) {
-            phones.forEach(phone => allPhones.push({ number: phone, line: line.toLowerCase() }));
-        }
-    });
-
-    let remainingPhones = [...allPhones];
-    const mobileKeywords = ['mobile', 'cell', 'm:'];
-    const workKeywords = ['work', 'office', 'o:', 'w:'];
-
-    // Find mobile phone
-    const mobileIndex = remainingPhones.findIndex(p => mobileKeywords.some(kw => p.line.includes(kw)));
-    if (mobileIndex !== -1) {
-        parsed.mobilePhone = standardizePhoneNumber(remainingPhones[mobileIndex].number);
-        remainingPhones.splice(mobileIndex, 1);
-    }
-
-    // Find work phone
-    const workIndex = remainingPhones.findIndex(p => workKeywords.some(kw => p.line.includes(kw)));
-    if (workIndex !== -1) {
-        parsed.workPhone = standardizePhoneNumber(remainingPhones[workIndex].number);
-        remainingPhones.splice(workIndex, 1);
-    }
-    
-    // Assign remaining phones - first available goes to mobile, second to work
-    if (!parsed.mobilePhone && remainingPhones.length > 0) {
-        parsed.mobilePhone = standardizePhoneNumber(remainingPhones.shift()!.number);
-    }
-    if (!parsed.workPhone && remainingPhones.length > 0) {
-        parsed.workPhone = standardizePhoneNumber(remainingPhones.shift()!.number);
-    }
-
-    // Extract name, title, and company from remaining content lines
-    const contentLines = lines.filter(line => {
-        const lowerLine = line.toLowerCase();
-        return (
-            !lowerLine.includes(parsed.email || 'nonexistent') &&
-            !lowerLine.includes(parsed.website || 'nonexistent') &&
-            !/linkedin\.com/.test(lowerLine) &&
-            !PHONE_REGEX.test(lowerLine) &&
-            !ADDRESS_REGEX.test(lowerLine)
-        );
-    });
-    
-    let nameLineIndex = -1;
-    let titleLineIndex = -1;
-    
-    // Find name (usually first line, 2-4 words)
-    if (contentLines.length > 0) {
-        const firstLine = contentLines[0];
-        const words = firstLine.split(' ');
-        if (words.length >= 2 && words.length <= 4) {
-            parsed.fullName = firstLine;
-            parsed.firstName = words[0];
-            parsed.lastName = words[words.length - 1];
-            nameLineIndex = 0;
+    // Extract address using the simple detection function
+    const detectedAddress = detectAddress(text);
+    if (detectedAddress) {
+        parsed.address = detectedAddress;
+        
+        // Parse address into components for better VCF compatibility
+        const addressComponents = parseAddressComponents(detectedAddress);
+        if (addressComponents) {
+            if (addressComponents.street) parsed.street = addressComponents.street;
+            if (addressComponents.city) parsed.city = addressComponents.city;
+            if (addressComponents.state) parsed.state = addressComponents.state;
+            if (addressComponents.zipCode) parsed.zipCode = addressComponents.zipCode;
         }
     }
 
-    // Find title line
-    for (let i = 0; i < contentLines.length; i++) {
-        if (i === nameLineIndex) continue;
-        const line = contentLines[i];
-        if (TITLE_KEYWORDS.some(kw => line.toLowerCase().includes(kw))) {
-            parsed.title = line;
-            titleLineIndex = i;
-            break;
+    // Extract phone numbers
+    const phoneMatches = text.match(PHONE_REGEX);
+    if (phoneMatches) {
+        if (phoneMatches.length >= 1) {
+            parsed.mobilePhone = standardizePhoneNumber(phoneMatches[0]);
+        }
+        if (phoneMatches.length >= 2) {
+            parsed.workPhone = standardizePhoneNumber(phoneMatches[1]);
         }
     }
 
-    // Find company line
-    for (let i = 0; i < contentLines.length; i++) {
-        if (i === nameLineIndex || i === titleLineIndex) continue;
-        const line = contentLines[i];
-        if (COMPANY_SUFFIXES.some(suf => line.toLowerCase().includes(suf)) || line.split(' ').length > 1) {
-            parsed.company = line;
-            break;
-        }
-    }
-
-    // Refine: if company is mentioned in title, separate it
-    if (parsed.title && !parsed.company) {
-        const titleParts = parsed.title.split(/,|-|\/| at /);
-        if (titleParts.length > 1) {
-            const lastPart = titleParts[titleParts.length - 1].trim();
-            if (COMPANY_SUFFIXES.some(suf => lastPart.toLowerCase().includes(suf)) || lastPart.split(' ').length > 1) {
-                parsed.company = lastPart;
-                parsed.title = titleParts.slice(0, -1).join(', ').trim();
+    // Extract name (first non-email, non-phone line)
+    for (const line of lines) {
+        if (!EMAIL_REGEX.test(line) && !PHONE_REGEX.test(line) && !line.includes('@') && !line.includes('www')) {
+            const words = line.split(' ');
+            if (words.length >= 2 && words.length <= 4) {
+                parsed.fullName = line;
+                parsed.firstName = words[0];
+                parsed.lastName = words.slice(1).join(' ');
+                break;
             }
         }
     }
 
-    // Clean up title if it contains company name
-    if (parsed.title && parsed.company && parsed.title.toLowerCase().includes(parsed.company.toLowerCase())) {
-        parsed.title = parsed.title.replace(new RegExp(parsed.company, 'i'), '').replace(/(\s-)?\s*$/, '').trim();
+    // Extract title - separate title from company if combined
+    let originalTitleLine = null; // Track the original line that contained the title
+    for (const line of lines) {
+        if (line !== parsed.fullName && TITLE_KEYWORDS.some(kw => line.toLowerCase().includes(kw))) {
+            originalTitleLine = line; // Remember the original line
+            
+            // Check if title is combined with company using common separators
+            const dashMatch = line.match(/^(.+?)\s*-\s*(.+)$/);
+            if (dashMatch) {
+                parsed.title = dashMatch[1].trim();
+                break;
+            }
+            
+            const atMatch = line.match(/^(.+?)\s+at\s+(.+)$/i);
+            if (atMatch) {
+                parsed.title = atMatch[1].trim();
+                break;
+            }
+            
+            const pipeMatch = line.match(/^(.+?)\s*\|\s*(.+)$/);
+            if (pipeMatch) {
+                parsed.title = pipeMatch[1].trim();
+                break;
+            }
+            
+            // If no separator found, use the whole line as title
+            parsed.title = line;
+            break;
+        }
+    }
+
+    // Extract company - look for lines with company keywords but exclude contact info
+    for (const line of lines) {
+        if (line !== parsed.fullName && line !== parsed.title && line !== originalTitleLine) {
+            // Skip lines that contain email addresses or phone numbers
+            if (line.includes('@') || /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(line)) {
+                continue;
+            }
+            
+            // Skip address lines
+            if (parsed.address && line.includes(parsed.address)) {
+                continue;
+            }
+            
+            // Look for company indicators
+            if (COMPANY_SUFFIXES.some(suf => line.toLowerCase().includes(suf))) {
+                parsed.company = line;
+                break;
+            }
+        }
     }
 
     return parsed;
@@ -322,4 +329,161 @@ export function validateContactData(contactData: ContactData): ContactData {
     }
     
     return cleaned;
-} 
+}
+
+// Parse address into components (street, city, state, zip)
+function parseAddressComponents(address: string): { street?: string; city?: string; state?: string; zipCode?: string } | null {
+    const result: { street?: string; city?: string; state?: string; zipCode?: string } = {};
+    
+    // Clean the address
+    const cleanAddress = address.replace(/\s+/g, ' ').trim();
+    
+    // Pattern 1: Full format with zip code (Street, City, State ZIP)
+    const fullAddressPattern = /^(.+?),\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i;
+    const fullMatch = cleanAddress.match(fullAddressPattern);
+    if (fullMatch) {
+        result.street = fullMatch[1].trim();
+        result.city = fullMatch[2].trim();
+        result.state = fullMatch[3].trim().toUpperCase();
+        result.zipCode = fullMatch[4].trim();
+        return result;
+    }
+    
+    // Pattern 2: City, State ZIP without street
+    const cityStateZipPattern = /^([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i;
+    const cityStateZipMatch = cleanAddress.match(cityStateZipPattern);
+    if (cityStateZipMatch) {
+        result.city = cityStateZipMatch[1].trim();
+        result.state = cityStateZipMatch[2].trim().toUpperCase();
+        result.zipCode = cityStateZipMatch[3].trim();
+        return result;
+    }
+    
+    // If we can't parse it properly, return null
+    return null;
+}
+
+// Extract phone numbers and categorize them
+function extractPhoneNumbers(text: string): { mobile?: string; work?: string } {
+    const phones: { mobile?: string; work?: string } = {};
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    
+    const allPhones: { number: string; line: string }[] = [];
+    lines.forEach(line => {
+        const phoneMatches = line.match(PHONE_REGEX);
+        if (phoneMatches) {
+            phoneMatches.forEach(phone => allPhones.push({ number: phone, line: line.toLowerCase() }));
+        }
+    });
+
+    let remainingPhones = [...allPhones];
+    const mobileKeywords = ['mobile', 'cell', 'm:'];
+    const workKeywords = ['work', 'office', 'o:', 'w:'];
+
+    // Find mobile phone
+    const mobileIndex = remainingPhones.findIndex(p => mobileKeywords.some(kw => p.line.includes(kw)));
+    if (mobileIndex !== -1) {
+        phones.mobile = standardizePhoneNumber(remainingPhones[mobileIndex].number);
+        remainingPhones.splice(mobileIndex, 1);
+    }
+
+    // Find work phone
+    const workIndex = remainingPhones.findIndex(p => workKeywords.some(kw => p.line.includes(kw)));
+    if (workIndex !== -1) {
+        phones.work = standardizePhoneNumber(remainingPhones[workIndex].number);
+        remainingPhones.splice(workIndex, 1);
+    }
+    
+    // Assign remaining phones - first available goes to mobile, second to work
+    if (!phones.mobile && remainingPhones.length > 0) {
+        phones.mobile = standardizePhoneNumber(remainingPhones.shift()!.number);
+    }
+    if (!phones.work && remainingPhones.length > 0) {
+        phones.work = standardizePhoneNumber(remainingPhones.shift()!.number);
+    }
+    
+    return phones;
+}
+
+// Extract full name from content lines
+function extractFullName(lines: string[]): string | undefined {
+    // Exclude lines that contain common non-name content
+    const contentLines = lines.filter(line => {
+        const lowerLine = line.toLowerCase();
+        return (
+            !EMAIL_REGEX.test(line) &&
+            !WEBSITE_REGEX.test(line) &&
+            !/linkedin\.com/.test(lowerLine) &&
+            !PHONE_REGEX.test(line) &&
+            !lowerLine.includes('@') &&
+            !lowerLine.includes('www.') &&
+            !lowerLine.includes('.com') &&
+            !lowerLine.includes('http')
+        );
+    });
+    
+    // Find name (usually first line, 2-4 words, no special characters)
+    if (contentLines.length > 0) {
+        const firstLine = contentLines[0];
+        const words = firstLine.split(' ').filter(word => word.length > 0);
+        if (words.length >= 2 && words.length <= 4 && !/[^a-zA-Z\s]/.test(firstLine)) {
+            return firstLine;
+        }
+    }
+    
+    return undefined;
+}
+
+// Extract title from content lines
+function extractTitle(lines: string[], fullName?: string): string | undefined {
+    const contentLines = lines.filter(line => {
+        const lowerLine = line.toLowerCase();
+        return (
+            line !== fullName &&
+            !EMAIL_REGEX.test(line) &&
+            !WEBSITE_REGEX.test(line) &&
+            !/linkedin\.com/.test(lowerLine) &&
+            !PHONE_REGEX.test(line) &&
+            !lowerLine.includes('@') &&
+            !lowerLine.includes('www.') &&
+            !lowerLine.includes('.com') &&
+            !lowerLine.includes('http')
+        );
+    });
+    
+    // Find title line
+    for (const line of contentLines) {
+        if (TITLE_KEYWORDS.some(kw => line.toLowerCase().includes(kw))) {
+            return line;
+        }
+    }
+    
+    return undefined;
+}
+
+// Extract company from content lines
+function extractCompany(lines: string[], title?: string): string | undefined {
+    const contentLines = lines.filter(line => {
+        const lowerLine = line.toLowerCase();
+        return (
+            line !== title &&
+            !EMAIL_REGEX.test(line) &&
+            !WEBSITE_REGEX.test(line) &&
+            !/linkedin\.com/.test(lowerLine) &&
+            !PHONE_REGEX.test(line) &&
+            !lowerLine.includes('@') &&
+            !lowerLine.includes('www.') &&
+            !lowerLine.includes('.com') &&
+            !lowerLine.includes('http')
+        );
+    });
+    
+    // Find company line
+    for (const line of contentLines) {
+        if (COMPANY_SUFFIXES.some(suf => line.toLowerCase().includes(suf)) || line.split(' ').length > 1) {
+            return line;
+        }
+    }
+    
+    return undefined;
+}

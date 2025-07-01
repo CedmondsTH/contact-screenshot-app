@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { image } = await request.json();
+    const formData = await request.formData();
+    const imageFile = formData.get('image') as File;
 
-    if (!image) {
-      return NextResponse.json({ message: 'Image data is required.' }, { status: 400 });
+    if (!imageFile) {
+      return NextResponse.json({ message: 'Image file is required.' }, { status: 400 });
     }
+
+    // Convert file to base64
+    const arrayBuffer = await imageFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const image = buffer.toString('base64');
 
     const GOOGLE_API_KEY = process.env.GOOGLE_CLOUD_API_KEY;
     if (!GOOGLE_API_KEY) {
