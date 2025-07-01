@@ -1,365 +1,80 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import Image from 'next/image';
+import ImageUpload from '../components/ImageUpload';
 import OCRProcessor from '../components/OCRProcessor';
-import ClipboardUpload from '../components/ClipboardUpload';
+import ContactForm from '../components/ContactForm';
+import { type ContactData as Contact } from '../types/contact';
 
-type AppState = 'upload' | 'processing' | 'editing';
+export default function Home() {
+  const [files, setFiles] = useState<File[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-interface ExtractedContact {
-  fullName?: string;
-  email?: string;
-  phone?: string;
-  company?: string;
-  title?: string;
-  website?: string;
-  linkedIn?: string;
-  address?: string;
-  rawText?: string;
-  confidence: number;
-}
+  const handleProcessingComplete = useCallback((results: Contact[]) => {
+    setContacts(results);
+    setFiles([]); // Clear files after processing
+  }, []);
 
-export default function HomePage() {
-  const [appState, setAppState] = useState<AppState>('upload');
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [extractedContacts, setExtractedContacts] = useState<ExtractedContact[]>([]);
-  const [editableContacts, setEditableContacts] = useState<ExtractedContact[]>([]);
+  const handleError = useCallback((errorMessage: string) => {
+    setError(errorMessage);
+    setFiles([]); // Clear files on error
+  }, []);
 
-  const handleFileUpload = (acceptedTypes: string[]) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.multiple = true;
-    input.onchange = (e) => {
-      const files = Array.from((e.target as HTMLInputElement).files || []);
-      if (files.length > 0) {
-        setUploadedFiles(files);
-        setAppState('processing');
-      }
-    };
-    input.click();
-  };
+  const handleStartOver = useCallback(() => {
+    setFiles([]);
+    setContacts([]);
+    setError(null);
+  }, []);
 
-  const handleFilesPasted = (files: File[]) => {
-    if (files.length > 0) {
-      setUploadedFiles(files);
-      setAppState('processing');
-    }
-  };
+  const handleFiles = (uploadedFiles: File[]) => {
+    setFiles(uploadedFiles);
+    setContacts([]);
+    setError(null);
+  }
 
-  const handleOCRComplete = (results: ExtractedContact[]) => {
-    setExtractedContacts(results);
-    setEditableContacts([...results]); // Create editable copy
-    setAppState('editing');
-  };
-
-  const handleOCRError = (error: string) => {
-    alert(`OCR processing failed: ${error}`);
-    setAppState('upload');
-  };
-
-  const handleContactChange = (index: number, field: keyof ExtractedContact, value: string) => {
-    setEditableContacts(prev => 
-      prev.map((contact, i) => 
-        i === index ? { ...contact, [field]: value } : contact
-      )
+  let content;
+  if (files.length > 0) {
+    content = (
+      <OCRProcessor 
+        files={files}
+        onComplete={handleProcessingComplete}
+        onError={handleError}
+      />
     );
-  };
-
-  const generateVCF = (contact: ExtractedContact): string => {
-    const lines = ['BEGIN:VCARD', 'VERSION:3.0'];
-    
-    if (contact.fullName) {
-      lines.push(`FN:${contact.fullName}`);
-      const nameParts = contact.fullName.split(' ');
-      if (nameParts.length >= 2) {
-        lines.push(`N:${nameParts[nameParts.length - 1]};${nameParts.slice(0, -1).join(' ')};;;`);
-      } else {
-        lines.push(`N:${contact.fullName};;;;`);
-      }
-    }
-    
-    if (contact.company) lines.push(`ORG:${contact.company}`);
-    if (contact.title) lines.push(`TITLE:${contact.title}`);
-    if (contact.email) lines.push(`EMAIL;TYPE=WORK:${contact.email}`);
-    if (contact.phone) lines.push(`TEL;TYPE=CELL:${contact.phone}`);
-    if (contact.website) lines.push(`URL:${contact.website}`);
-    
-    // Add address if available
-    if (contact.address) {
-      lines.push(`ADR;TYPE=WORK:;;${contact.address};;;;`);
-    }
-    
-    // Add LinkedIn URL as additional URL if we have both website and LinkedIn
-    if (contact.linkedIn) {
-      if (!contact.website) {
-        lines.push(`URL:${contact.linkedIn}`);
-      } else {
-        // Add LinkedIn as a second URL entry
-        lines.push(`URL;TYPE=LINKEDIN:${contact.linkedIn}`);
-      }
-    }
-    
-    lines.push('END:VCARD');
-    
-    return lines.join('\r\n');
-  };
-
-  const downloadVCF = (contact: ExtractedContact, index: number) => {
-    const vcfContent = generateVCF(contact);
-    const blob = new Blob([vcfContent], { type: 'text/vcard;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    const fileName = contact.fullName 
-      ? `${contact.fullName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_')}_contact.vcf`
-      : `contact_${index + 1}.vcf`;
-    link.download = fileName;
-    link.click();
-    
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadAllVCF = () => {
-    const allVCF = editableContacts.map(contact => generateVCF(contact)).join('\r\n\r\n');
-    const blob = new Blob([allVCF], { type: 'text/vcard;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `contacts_batch_${new Date().toISOString().split('T')[0]}.vcf`;
-    link.click();
-    
-    URL.revokeObjectURL(url);
-  };
-
-  const handleStartOver = () => {
-    setAppState('upload');
-    setUploadedFiles([]);
-    setExtractedContacts([]);
-    setEditableContacts([]);
-  };
+  } else if (contacts.length > 0 || error) {
+    content = (
+      <ContactForm 
+        contacts={contacts}
+        error={error}
+        onStartOver={handleStartOver} 
+      />
+    );
+  } else {
+    content = <ImageUpload onFilesUploaded={handleFiles} />;
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
-        <header className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Contact Screenshot App
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-4">
-            Convert email signatures and LinkedIn profiles into downloadable contact cards (.vcf files)
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl mx-auto">
-            <div className="text-sm text-blue-800">
-              <strong>💡 Quick Start:</strong> Take a screenshot with <kbd className="px-1 py-0.5 bg-blue-200 rounded text-xs">Win + Shift + S</kbd>, then paste it here with <kbd className="px-1 py-0.5 bg-blue-200 rounded text-xs">Ctrl + V</kbd>
-            </div>
-          </div>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
+      <div className="w-full max-w-2xl mx-auto">
+        <header className="text-center mb-8">
+          <Image
+            src="/logo_transparent.png"
+            alt="Trackhawk Logo"
+            width={400}
+            height={100}
+            className="mx-auto mb-4"
+            priority
+          />
         </header>
+        
+        <main className="w-full">
+          {content}
+        </main>
 
-        <div className="max-w-4xl mx-auto">
-          {appState === 'upload' && (
-            <div className="space-y-8">
-              {/* Clipboard Upload Section */}
-              <ClipboardUpload onFilesPasted={handleFilesPasted} />
-              
-              {/* Alternative Upload Methods */}
-              <div className="text-center">
-                <div className="text-gray-500 text-sm mb-4">Or choose upload method:</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <button 
-                    onClick={() => handleFileUpload(['email-signature'])}
-                    className="bg-white border-2 border-gray-200 hover:border-blue-400 rounded-lg p-4 transition-all hover:shadow-md"
-                  >
-                    <div className="text-2xl mb-2">📧</div>
-                    <div className="font-semibold">Email Signatures</div>
-                    <div className="text-sm text-gray-600">Browse for files</div>
-                  </button>
-
-                  <button 
-                    onClick={() => handleFileUpload(['linkedin-profile'])}
-                    className="bg-white border-2 border-gray-200 hover:border-blue-400 rounded-lg p-4 transition-all hover:shadow-md"
-                  >
-                    <div className="text-2xl mb-2">💼</div>
-                    <div className="font-semibold">LinkedIn Profiles</div>
-                    <div className="text-sm text-gray-600">Browse for files</div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {appState === 'processing' && (
-            <OCRProcessor
-              files={uploadedFiles}
-              onComplete={handleOCRComplete}
-              onError={handleOCRError}
-            />
-          )}
-
-          {appState === 'editing' && (
-            <div className="space-y-8">
-              <div className="text-center">
-                <h2 className="text-2xl font-semibold mb-4">✨ Extracted Contact Information</h2>
-                <p className="text-gray-600">
-                  Review and edit the extracted information before downloading your contact cards
-                </p>
-              </div>
-
-              {editableContacts.map((contact, index) => (
-                <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-semibold">
-                      Contact {index + 1}
-                      {contact.confidence && (
-                        <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
-                          contact.confidence > 0.8 ? 'bg-green-100 text-green-800' :
-                          contact.confidence > 0.6 ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {Math.round(contact.confidence * 100)}% confidence
-                        </span>
-                      )}
-                    </h3>
-                    <button
-                      onClick={() => downloadVCF(contact, index)}
-                      className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors text-sm"
-                    >
-                      📥 Download VCF
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                      <input 
-                        type="text" 
-                        value={contact.fullName || ''}
-                        onChange={(e) => handleContactChange(index, 'fullName', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                      <input 
-                        type="email" 
-                        value={contact.email || ''}
-                        onChange={(e) => handleContactChange(index, 'email', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                      <input 
-                        type="tel" 
-                        value={contact.phone || ''}
-                        onChange={(e) => handleContactChange(index, 'phone', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Company</label>
-                      <input 
-                        type="text" 
-                        value={contact.company || ''}
-                        onChange={(e) => handleContactChange(index, 'company', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Job Title</label>
-                      <input 
-                        type="text" 
-                        value={contact.title || ''}
-                        onChange={(e) => handleContactChange(index, 'title', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
-                      <input 
-                        type="url" 
-                        value={contact.website || ''}
-                        onChange={(e) => handleContactChange(index, 'website', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                      <input 
-                        type="text" 
-                        value={contact.address || ''}
-                        onChange={(e) => handleContactChange(index, 'address', e.target.value)}
-                        placeholder="Street address, city, state, zip"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">LinkedIn Profile</label>
-                      <input 
-                        type="url" 
-                        value={contact.linkedIn || ''}
-                        onChange={(e) => handleContactChange(index, 'linkedIn', e.target.value)}
-                        placeholder="https://linkedin.com/in/username"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  {contact.rawText && (
-                    <details className="mt-4">
-                      <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-800">
-                        View extracted raw text
-                      </summary>
-                      <pre className="mt-2 p-3 bg-gray-50 rounded text-xs whitespace-pre-wrap text-gray-700">
-                        {contact.rawText}
-                      </pre>
-                    </details>
-                  )}
-                </div>
-              ))}
-
-              <div className="flex justify-center space-x-4">
-                {editableContacts.length > 1 && (
-                  <button 
-                    onClick={downloadAllVCF}
-                    className="bg-purple-500 hover:bg-purple-600 text-white font-medium py-3 px-6 rounded-lg transition-colors"
-                  >
-                    📦 Download All VCF Files
-                  </button>
-                )}
-                <button 
-                  onClick={handleStartOver}
-                  className="bg-gray-500 hover:bg-gray-600 text-white font-medium py-3 px-6 rounded-lg transition-colors"
-                >
-                  🔄 Start Over
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <footer className="mt-16 text-center text-gray-500">
-          <div className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-2">📧 Email Signatures</h3>
-                <p className="text-sm">Extract contact info from email signature screenshots</p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-2">💼 LinkedIn Profiles</h3>
-                <p className="text-sm">Convert LinkedIn profiles to contact cards</p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-2">📱 VCF Files</h3>
-                <p className="text-sm">Compatible with Outlook, Apple Contacts, and more</p>
-              </div>
-            </div>
-            <p className="text-sm">
-              Built with Next.js, Tailwind CSS, and Tesseract.js OCR ✨
-            </p>
-          </div>
+        <footer className="text-center mt-8 text-sm text-muted-foreground">
+          <p>Built with Next.js and Tesseract.js. Styled with Tailwind CSS.</p>
         </footer>
       </div>
     </div>

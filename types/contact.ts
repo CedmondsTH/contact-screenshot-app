@@ -6,10 +6,8 @@ export interface ContactData {
   title?: string;
   company?: string;
   email?: string;
-  phone?: string;
   mobilePhone?: string;
   workPhone?: string;
-  homePhone?: string;
   linkedIn?: string;
   website?: string;
   address?: string;
@@ -21,6 +19,7 @@ export interface ContactData {
   headline?: string;
   location?: string;
   profileUrl?: string;
+  rawText?: string;
   // Confidence scores for extracted fields
   confidence?: {
     [key: string]: number;

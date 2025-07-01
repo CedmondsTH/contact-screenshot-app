@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Contact Screenshot App',
-  description: 'Convert email signatures and LinkedIn profiles to contact cards',
+  description: 'Easily convert contact info from screenshots to VCF files.',
   keywords: ['contact', 'email signature', 'linkedin', 'vcf', 'contact card'],
   authors: [{ name: 'Contact Screenshot App' }],
   viewport: 'width=device-width, initial-scale=1',
@@ -15,13 +15,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} min-h-screen bg-gray-50`}>
-        <main className="min-h-screen">
+    <html lang="en" className="dark">
+      <body className={inter.className}>
+        <main className="min-h-screen bg-background text-foreground">
           {children}
         </main>
       </body>

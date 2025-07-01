@@ -1,188 +1,131 @@
 'use client';
 
+import { useState } from 'react';
+import { type ContactData } from '../types/contact';
+
 interface ContactFormProps {
-  contacts: any[];
-  processingResults: any[];
-  onContactsUpdated: (contacts: any[]) => void;
+  contacts: ContactData[];
+  error: string | null;
   onStartOver: () => void;
 }
 
-export default function ContactForm({ contacts, onStartOver }: ContactFormProps) {
-  const handleDownload = () => {
-    // Mock download functionality
-    alert('VCF file would be downloaded here');
+const FieldLabel = ({ field }: { field: string }) => (
+  <label className="block text-sm font-medium mb-1.5 capitalize text-muted-foreground">
+    {field.replace(/([A-Z])/g, ' $1')}
+  </label>
+);
+
+const FieldInput = ({ value, onChange }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; }) => (
+  <input
+    type="text"
+    value={value}
+    onChange={onChange}
+    className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+  />
+);
+
+export default function ContactForm({ contacts, error, onStartOver }: ContactFormProps) {
+  const [editableContacts, setEditableContacts] = useState(contacts);
+
+  const handleDownload = async (contact: ContactData) => {
+    try {
+      const response = await fetch('/api/vcf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contact),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate vCard');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = 'contact.vcf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch && filenameMatch.length === 2) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error('Download failed:', error);
+      // You could show an error message to the user here
+    }
   };
 
+  const handleFieldChange = (index: number, field: keyof ContactData, value: string) => {
+    const newContacts = [...editableContacts];
+    newContacts[index] = { ...newContacts[index], [field]: value };
+    setEditableContacts(newContacts);
+  };
+
+  if (error) {
+    return (
+      <div className="bg-card border border-destructive/50 rounded-lg p-6 text-center">
+        <h3 className="text-xl font-semibold text-destructive">Processing Failed</h3>
+        <p className="text-muted-foreground mt-2 mb-6">{error}</p>
+        <button onClick={onStartOver} className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium">
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-semibold text-center">Contact Information</h2>
-      
-      {contacts.map((contact, index) => (
-        <div key={index} className="card">
-          <h3 className="font-semibold mb-4">{contact.fullName}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-8">
+      {editableContacts.map((contact, index) => (
+        <div key={index} className="bg-card border border-border rounded-lg p-6">
+          <div className="flex justify-between items-start mb-6">
             <div>
-              <label className="block text-sm font-medium mb-1">Email:</label>
-              <input 
-                type="email" 
-                value={contact.email || ''} 
-                className="input-field"
-                readOnly
-              />
+              <h3 className="text-xl font-semibold">Contact Result {index + 1}</h3>
             </div>
-            {contact.phone && (
-              <div>
-                <label className="block text-sm font-medium mb-1">Phone:</label>
-                <input 
-                  type="tel" 
-                  value={contact.phone || ''} 
-                  className="input-field"
-                  readOnly
-                />
-              </div>
-            )}
-            {contact.mobilePhone && (
-              <div>
-                <label className="block text-sm font-medium mb-1">Mobile:</label>
-                <input 
-                  type="tel" 
-                  value={contact.mobilePhone || ''} 
-                  className="input-field"
-                  readOnly
-                />
-              </div>
-            )}
-            {contact.workPhone && (
-              <div>
-                <label className="block text-sm font-medium mb-1">Work Phone:</label>
-                <input 
-                  type="tel" 
-                  value={contact.workPhone || ''} 
-                  className="input-field"
-                  readOnly
-                />
-              </div>
-            )}
-            {contact.homePhone && (
-              <div>
-                <label className="block text-sm font-medium mb-1">Home Phone:</label>
-                <input 
-                  type="tel" 
-                  value={contact.homePhone || ''} 
-                  className="input-field"
-                  readOnly
-                />
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium mb-1">Company:</label>
-              <input 
-                type="text" 
-                value={contact.company || ''} 
-                className="input-field"
-                readOnly
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Title:</label>
-              <input 
-                type="text" 
-                value={contact.title || ''} 
-                className="input-field"
-                readOnly
-              />
-            </div>
-            {contact.linkedIn && (
-              <div>
-                <label className="block text-sm font-medium mb-1">LinkedIn:</label>
-                <input 
-                  type="url" 
-                  value={contact.linkedIn || ''} 
-                  className="input-field"
-                  readOnly
-                />
-              </div>
-            )}
-            {contact.website && (
-              <div>
-                <label className="block text-sm font-medium mb-1">Website:</label>
-                <input 
-                  type="url" 
-                  value={contact.website || ''} 
-                  className="input-field"
-                  readOnly
-                />
-              </div>
-            )}
-            {contact.headline && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">LinkedIn Headline:</label>
-                <input 
-                  type="text" 
-                  value={contact.headline || ''} 
-                  className="input-field"
-                  readOnly
-                />
-              </div>
-            )}
-            {contact.address && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Street Address:</label>
-                <input 
-                  type="text" 
-                  value={contact.address || ''} 
-                  className="input-field"
-                  readOnly
-                />
-              </div>
-            )}
-            {(contact.city || contact.state || contact.zipCode) && (
-              <>
-                {contact.city && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">City:</label>
-                    <input 
-                      type="text" 
-                      value={contact.city || ''} 
-                      className="input-field"
-                      readOnly
-                    />
-                  </div>
-                )}
-                {contact.state && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">State:</label>
-                    <input 
-                      type="text" 
-                      value={contact.state || ''} 
-                      className="input-field"
-                      readOnly
-                    />
-                  </div>
-                )}
-                {contact.zipCode && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Zip Code:</label>
-                    <input 
-                      type="text" 
-                      value={contact.zipCode || ''} 
-                      className="input-field"
-                      readOnly
-                    />
-                  </div>
-                )}
-              </>
-            )}
+            <button onClick={() => handleDownload(contact)} className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium">
+              Download vCard
+            </button>
           </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            {Object.entries(contact)
+              .filter(([key]) => !['rawText', 'confidence', 'firstName', 'lastName'].includes(key))
+              .map(([key, value]) => (
+                <div key={key}>
+                  <FieldLabel field={key} />
+                  <FieldInput 
+                    value={value as string || ''} 
+                    onChange={(e) => handleFieldChange(index, key as keyof ContactData, e.target.value)}
+                  />
+                </div>
+            ))}
+          </div>
+
+          {contact.rawText && (
+            <details className="mt-6">
+              <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                View Extracted Text
+              </summary>
+              <pre className="mt-2 p-3 bg-secondary/30 rounded-md text-xs whitespace-pre-wrap font-mono">
+                {contact.rawText}
+              </pre>
+            </details>
+          )}
         </div>
       ))}
       
-      <div className="flex justify-center space-x-4">
-        <button onClick={handleDownload} className="btn-primary">
-          Download VCF Files
-        </button>
-        <button onClick={onStartOver} className="btn-secondary">
-          Start Over
+      <div className="text-center pt-4">
+        <button onClick={onStartOver} className="bg-secondary text-secondary-foreground hover:bg-secondary/80 px-6 py-2 rounded-md font-medium">
+          Scan Another
         </button>
       </div>
     </div>

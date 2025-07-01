@@ -2,63 +2,55 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { image, provider } = await request.json();
+    const { image } = await request.json();
 
-    if (provider === 'google') {
-      // Google Cloud Vision API
-      const GOOGLE_API_KEY = process.env.GOOGLE_CLOUD_API_KEY;
-      
-      console.log('Environment variables check:', {
-        hasKey: !!GOOGLE_API_KEY,
-        keyLength: GOOGLE_API_KEY?.length,
-        allEnvKeys: Object.keys(process.env).filter(key => key.includes('GOOGLE'))
-      });
-      
-      if (!GOOGLE_API_KEY) {
-        throw new Error('Google Cloud API key not configured');
-      }
-
-      const response = await fetch(
-        `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_API_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            requests: [
-              {
-                image: {
-                  content: image,
-                },
-                features: [
-                  {
-                    type: 'TEXT_DETECTION',
-                    maxResults: 1,
-                  },
-                ],
-              },
-            ],
-          }),
-        }
-      );
-
-      const data = await response.json();
-      
-      if (data.responses && data.responses[0] && data.responses[0].textAnnotations) {
-        const text = data.responses[0].textAnnotations[0].description;
-        return NextResponse.json({ text, provider: 'google' });
-      }
-      
-      throw new Error('No text detected');
+    if (!image) {
+      return NextResponse.json({ message: 'Image data is required.' }, { status: 400 });
     }
 
-    return NextResponse.json({ error: 'Unsupported provider' }, { status: 400 });
-  } catch (error) {
-    console.error('OCR API error:', error);
-    return NextResponse.json(
-      { error: 'OCR processing failed', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+    const GOOGLE_API_KEY = process.env.GOOGLE_CLOUD_API_KEY;
+    if (!GOOGLE_API_KEY) {
+      console.error('Google Cloud API key is not configured on the server.');
+      return NextResponse.json({ message: 'Server configuration error.' }, { status: 500 });
+    }
+
+    const response = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requests: [
+            {
+              image: { content: image },
+              features: [{ type: 'TEXT_DETECTION' }],
+            },
+          ],
+        }),
+      }
     );
+    
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Google Vision API Error:', data);
+      const error = data.error?.message || 'Failed to process image with Vision API.';
+      return NextResponse.json({ message: error }, { status: response.status });
+    }
+    
+    const text = data.responses?.[0]?.fullTextAnnotation?.text;
+
+    if (!text) {
+      return NextResponse.json({ message: 'No text could be extracted from the image.' }, { status: 404 });
+    }
+    
+    return NextResponse.json({ text });
+
+  } catch (error) {
+    console.error('OCR API Error:', error);
+    const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return NextResponse.json({ message: 'OCR processing failed', error: message }, { status: 500 });
   }
 } 
