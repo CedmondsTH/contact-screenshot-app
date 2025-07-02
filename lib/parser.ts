@@ -103,11 +103,19 @@ export function parseEmailSignature(text: string): ContactData {
         }
     }
 
-    // Extract name (first non-email, non-phone line)
+    // Extract name - look for lines that look like person names, not company names
     for (const line of lines) {
         if (!EMAIL_REGEX.test(line) && !PHONE_REGEX.test(line) && !line.includes('@') && !line.includes('www')) {
             const words = line.split(' ');
-            if (words.length >= 2 && words.length <= 4) {
+            // Skip lines that are likely company names
+            const isLikelyCompany = COMPANY_SUFFIXES.some(suffix => 
+                line.toLowerCase().includes(suffix.toLowerCase())
+            ) || line.toLowerCase().includes('brand') || line.toLowerCase().includes('group') || 
+            line.toLowerCase().includes('company') || line.toLowerCase().includes('corp');
+            
+            // Look for lines with 2-4 words that don't contain title keywords and aren't companies
+            if (words.length >= 2 && words.length <= 4 && !isLikelyCompany && 
+                !TITLE_KEYWORDS.some(kw => line.toLowerCase().includes(kw))) {
                 parsed.fullName = line;
                 parsed.firstName = words[0];
                 parsed.lastName = words.slice(1).join(' ');
@@ -147,7 +155,9 @@ export function parseEmailSignature(text: string): ContactData {
         }
     }
 
-    // Extract company - look for lines with company keywords but exclude contact info
+    // Extract company - look for lines with company keywords or brand names
+    let potentialCompanies: string[] = [];
+    
     for (const line of lines) {
         if (line !== parsed.fullName && line !== parsed.title && line !== originalTitleLine) {
             // Skip lines that contain email addresses or phone numbers
@@ -160,10 +170,44 @@ export function parseEmailSignature(text: string): ContactData {
                 continue;
             }
             
-            // Look for company indicators
-            if (COMPANY_SUFFIXES.some(suf => line.toLowerCase().includes(suf))) {
-                parsed.company = line;
-                break;
+            // Look for company indicators - expanded to catch more company names
+            if (COMPANY_SUFFIXES.some(suf => line.toLowerCase().includes(suf.toLowerCase())) ||
+                line.toLowerCase().includes('brand') || line.toLowerCase().includes('group') ||
+                line.toLowerCase().includes('company') || line.toLowerCase().includes('corp') ||
+                line.toLowerCase().includes('firms') || line.toLowerCase().includes('associates') ||
+                line.toLowerCase().includes('partners') || line.toLowerCase().includes('solutions') ||
+                line.toLowerCase().includes('services')) {
+                potentialCompanies.push(line);
+            }
+        }
+    }
+    
+    // Prefer company names with proper spacing (contains spaces between words)
+    if (potentialCompanies.length > 0) {
+        const spacedCompany = potentialCompanies.find(company => company.includes(' '));
+        parsed.company = spacedCompany || potentialCompanies[0];
+    }
+
+    // Extract website URLs - look for www. patterns first, then broader matches
+    for (const line of lines) {
+        if (line.toLowerCase().startsWith('www.')) {
+            parsed.website = line;
+            break;
+        }
+    }
+    
+    // If no www. found, try broader website regex
+    if (!parsed.website) {
+        const websiteMatches = text.match(WEBSITE_REGEX);
+        if (websiteMatches) {
+            // Filter out email addresses and phone numbers from website matches
+            const validWebsite = websiteMatches.find(match => 
+                !match.includes('@') && 
+                !match.includes('strickland') && 
+                !EMAIL_REGEX.test(match)
+            );
+            if (validWebsite) {
+                parsed.website = validWebsite;
             }
         }
     }

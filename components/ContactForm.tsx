@@ -9,11 +9,18 @@ interface ContactFormProps {
   onStartOver: () => void;
 }
 
-const FieldLabel = ({ field }: { field: string }) => (
-  <label className="block text-sm font-medium mb-1.5 capitalize text-muted-foreground">
-    {field.replace(/([A-Z])/g, ' $1')}
-  </label>
-);
+const FieldLabel = ({ field }: { field: string }) => {
+  const getFieldLabel = (fieldName: string) => {
+    if (fieldName === 'linkedIn') return 'LinkedIn URL';
+    return fieldName.replace(/([A-Z])/g, ' $1');
+  };
+  
+  return (
+    <label className="block text-sm font-medium mb-1.5 capitalize text-muted-foreground">
+      {getFieldLabel(field)}
+    </label>
+  );
+};
 
 const FieldInput = ({ value, onChange }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; }) => (
   <input
@@ -96,17 +103,19 @@ export default function ContactForm({ contacts, error, onStartOver }: ContactFor
             </button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            {Object.entries(contact)
-              .filter(([key]) => !['rawText', 'confidence', 'firstName', 'lastName'].includes(key))
-              .map(([key, value]) => (
-                <div key={key}>
-                  <FieldLabel field={key} />
-                  <FieldInput 
-                    value={value as string || ''} 
-                    onChange={(e) => handleFieldChange(index, key as keyof ContactData, e.target.value)}
-                  />
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-4">
+            {[
+              'firstName', 'lastName', 'fullName', 'title', 'company', 
+              'email', 'mobilePhone', 'workPhone', 'linkedIn', 'website', 
+              'address', 'street', 'city', 'state', 'zipCode', 'country'
+            ].map((fieldKey) => (
+              <div key={fieldKey}>
+                <FieldLabel field={fieldKey} />
+                <FieldInput 
+                  value={(contact as any)[fieldKey] || ''} 
+                  onChange={(e) => handleFieldChange(index, fieldKey as keyof ContactData, e.target.value)}
+                />
+              </div>
             ))}
           </div>
 
